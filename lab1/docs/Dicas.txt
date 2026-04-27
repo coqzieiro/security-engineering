@@ -1,0 +1,4 @@
+- A VM e os labs (arquivos do Netkit) para download estão em http://www.lsec.icmc.usp.br/livronetkitbr/downloads.php
+- A versão correta da máquina virtual é: VM 13.09
+- O arquivo da máquina virtual é para Oracle VirtualBox. Se alguém tiver algum problema na importação da máquina virtual é possível que tenha esquecido de instalar o pacote adicional: VirtualBox Extension Pack.
+- A senha da máquina virtual é: 12345678

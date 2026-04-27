@@ -1,0 +1,18 @@
+
+Passo 6 - Após executar o comando descrito no passo 6 será necessário pressionar [Enter] 3 vezes antes de ir para o Passo 7. O sistema vai solicitar um nome de arquivo, uma passphrase e a confirmação da passphrase. Todos devem ficar em branco, então a solução é não informar nada, apenas pressionar [Enter].
+
+Passo 9 - Este passo tem que ser lido com atenção. É necessário dar um EXIT para sair do usuário joaquim e, em seguida, entrar novamente na pasta /home/joaquim/.ssh para então sim copiar a chave.
+
+
+- Para muitos alunos o passo 12 pode não funcionar corretamente.
+- De modo geral, o sugerido é não copiar e colar os comandos, pois caracteres estranho sempre atrapalham a execução do comando.
+- O arquivo do passo 16 causa muita confusão. Tem que prestar atenção.
+
+- O passo 18 manda repetir os passos 16 e 17, mas usar a mesma minhavpn.key gerada no Servidor A.
+- O passo 20 é para ser executado o ping de um servidor para o outro. Obviamente não é para pingar o 10.0.0.0, mas sim o 10.0.0.1 e o 10.0.0.2.
+
+Passos que podem gerar confusão:
+
+Passo 6 - Após executar o comando descrito no passo 6 será necessário pressionar [Enter] 3 vezes antes de ir para o Passo 7. O sistema vai solicitar um nome de arquivo, uma passphrase e a confirmação da passphrase. Todos devem ficar em branco, então a solução é não informar nada, apenas pressionar [Enter].
+
+Passo 9 - Este passo tem que ser lido com atenção. É necessário dar um EXIT para sair do usuário joaquim e, em seguida, entrar novamente na pasta /home/joaquim/.ssh para então sim copiar a chave.

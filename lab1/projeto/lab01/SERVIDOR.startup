@@ -1,0 +1,25 @@
+#configuracao do SERVIDOR da empresa
+ifconfig eth0 10.1.1.1 netmask 255.0.0.0 up
+ifconfig eth1 202.135.187.131 netmask 255.255.255.192 up
+route add default gw 202.135.187.129 dev eth1
+
+# Servico FTP publico do SERVIDOR na porta 20
+/etc/init.d/proftpd start
+
+# Habilita o roteamento entre a rede interna da empresa e a Internet
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# Limpa regras anteriores para deixar o laboratorio reproduzivel
+iptables -F
+iptables -F -t nat
+iptables -F -t mangle
+
+# Compartilhamento de Internet para a rede 10.0.0.0/8 via NAT/MASQUERADE
+iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE
+
+# Publicacao dos servicos internos pelo endereco publico 202.135.187.131
+iptables -t nat -A PREROUTING -p tcp --dport 21 -j DNAT --to 10.1.1.13
+iptables -t nat -A PREROUTING -p tcp --dport 22 -j DNAT --to 10.1.1.11
+
+# Bloqueia o FTP local do SERVIDOR na porta 20, conforme o passo 19 do roteiro
+iptables -A INPUT -p tcp --dport 20 -j REJECT

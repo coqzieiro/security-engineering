@@ -1,0 +1,62 @@
+#configuracao do SERVIDOR da empresa
+ifconfig eth0 202.135.187.10 netmask 255.255.255.192 up
+ifconfig eth1 192.168.2.1 netmask 255.255.255.0 up
+route add default gw 202.135.187.1 dev eth0
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+iptables -F
+iptables -F -t nat
+iptables -F -t mangle
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# Permite fluxo entre rede local e tunel VPN
+iptables -A FORWARD -i eth1 -o tun0 -j ACCEPT
+iptables -A FORWARD -i tun0 -o eth1 -j ACCEPT
+
+# Mesma chave estatica usada no SERVIDORA
+cat > /etc/openvpn/minhavpn.key <<'EOF'
+#
+# 2048 bit OpenVPN static key
+#
+-----BEGIN OpenVPN Static key V1-----
+97a613afdf33722ab358906022110c00
+4a524196080c59315fb615fc17d24761
+4fd9061b7966c3c0090715ef1874a0e7
+99538084c07da58da93656d7159dd295
+5c5084ae22ddcd627f4bf42605ae30ef
+3a8e13e0dbaa48de18f8680eb642faef
+bfd8ece6abab8b78a361a596cc12bda1
+3cfc66642444ec79287e5413b13aaf90
+878dfa85a4cd4278a0762075165d9803
+5547fdb45bdfa9e71d4a4981a3026af0
+9e3c543f08c8e1a7a55a14c830c36762
+6f5ea2652895a5104a3d8431166fb04f
+afd6c22ab7aaf5fcb317f0eff464f358
+deffcd3afd894c0b02009199dd370ab7
+74c4dd014c08835128ddf40522e9e890
+c7f2b88d2c3dffe21894f2dbbf10771a
+-----END OpenVPN Static key V1-----
+EOF
+chmod 600 /etc/openvpn/minhavpn.key
+
+# Configuracao da VPN filial (B) -> matriz (A)
+cat > /etc/openvpn/filial.conf <<'EOF'
+remote 143.102.212.10
+dev tun
+ifconfig 10.0.0.2 10.0.0.1
+cd /etc/openvpn
+secret minhavpn.key
+port 5000
+user root
+group root
+comp-lzo
+ping 15
+verb 3
+daemon
+EOF
+
+openvpn --config /etc/openvpn/filial.conf
+
+# Rota para chegar na rede da empresa A pelo tunel VPN
+route add -net 192.168.1.0/24 gw 10.0.0.1

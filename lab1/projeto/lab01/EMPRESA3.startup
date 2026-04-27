@@ -1,0 +1,6 @@
+#configuracao do host EMPRESA3
+ifconfig eth0 10.1.1.13 netmask 255.0.0.0 up
+route add default gw 10.1.1.1 dev eth0
+
+# Servico FTP interno publicado pelo SERVIDOR na porta publica 21
+/etc/init.d/proftpd start

@@ -1,0 +1,3 @@
+#configuracao da internet
+ifconfig eth0 202.135.187.1 netmask 255.255.255.192 up
+ifconfig eth1 143.102.212.1 netmask 255.255.255.192 up

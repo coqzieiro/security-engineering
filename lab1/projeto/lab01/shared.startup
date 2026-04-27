@@ -1,0 +1,12 @@
+echo "Voce esta no computador $HOSTNAME" > /etc/skel/local_$HOSTNAME.txt
+useradd -d /home/manuel -m -p 123man manuel
+useradd -d /home/maria -m -p 123mar maria
+useradd -d /home/joaquim -m -p 123joa joaquim
+useradd -d /home/comprador -m -p 123com comprador
+echo "Pasta do manuel" > /home/manuel/manuel.txt
+echo "Pasta da maria" > /home/maria/maria.txt
+echo "Pasta do joaquim" > /home/joaquim/joaquim.txt
+echo "Pasta do comprador" > /home/comprador/comprador.txt
+chmod 777 /home/* -R
+rm /etc/shadow -f
+mv /etc/shadow.new /etc/shadow

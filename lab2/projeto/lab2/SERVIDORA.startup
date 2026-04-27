@@ -1,0 +1,74 @@
+#configuracao do SERVIDOR da empresa
+ifconfig eth0 192.168.1.1 netmask 255.255.255.0 up
+ifconfig eth1 143.102.212.10 netmask 255.255.255.192 up
+route add default gw 143.102.212.1 dev eth1
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+iptables -F
+iptables -F -t nat
+iptables -F -t mangle
+iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE
+
+# Permite fluxo entre rede local e tunel VPN
+iptables -A FORWARD -i eth0 -o tun0 -j ACCEPT
+iptables -A FORWARD -i tun0 -o eth0 -j ACCEPT
+
+# Habilita SSH no servidor A
+/etc/init.d/ssh start
+
+# Prepara o authorized_keys do usuario joaquim para acesso sem senha do EMPRESA1A
+mkdir -p /home/joaquim/.ssh
+cat > /home/joaquim/.ssh/authorized_keys <<'EOF'
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCdSA96OPP2kXvcJBIoc/mr05HqRCkbBJ6go/qi5dHJhb14bGU7YwdjzfjsPtycrLziVGS2ZBEy2nIBW3S5BcXp/P/aUjL51ie5b2FJ0ZGWFRPa9TAgMeLha0uHzbjcF4+iMpLYWZ4ScoB0dMziw43QlB/uMBVhzXPJTk82zbzj0FimGXHhhX5LIX48u0swCOposZZGeHsB4CrlSPxgckndbPmZy33cFH8rwfqIDvtv24R877EqlxwFKIswJlXU5vfRNHAYKLxIkpRAhnpWx2cgXMIvk1yrRJeB80/RzzyxE94ED9rBqefGfgNTX96STur0Aa+eEamkJi62XWS9+io9 coqzieiro@felipe-note24K
+EOF
+chmod 700 /home/joaquim/.ssh
+chmod 600 /home/joaquim/.ssh/authorized_keys
+chown -R joaquim:joaquim /home/joaquim/.ssh
+
+# Chave estatica compartilhada entre os dois peers OpenVPN
+cat > /etc/openvpn/minhavpn.key <<'EOF'
+#
+# 2048 bit OpenVPN static key
+#
+-----BEGIN OpenVPN Static key V1-----
+97a613afdf33722ab358906022110c00
+4a524196080c59315fb615fc17d24761
+4fd9061b7966c3c0090715ef1874a0e7
+99538084c07da58da93656d7159dd295
+5c5084ae22ddcd627f4bf42605ae30ef
+3a8e13e0dbaa48de18f8680eb642faef
+bfd8ece6abab8b78a361a596cc12bda1
+3cfc66642444ec79287e5413b13aaf90
+878dfa85a4cd4278a0762075165d9803
+5547fdb45bdfa9e71d4a4981a3026af0
+9e3c543f08c8e1a7a55a14c830c36762
+6f5ea2652895a5104a3d8431166fb04f
+afd6c22ab7aaf5fcb317f0eff464f358
+deffcd3afd894c0b02009199dd370ab7
+74c4dd014c08835128ddf40522e9e890
+c7f2b88d2c3dffe21894f2dbbf10771a
+-----END OpenVPN Static key V1-----
+EOF
+chmod 600 /etc/openvpn/minhavpn.key
+
+# Configuracao da VPN matriz (A) -> filial (B)
+cat > /etc/openvpn/matriz.conf <<'EOF'
+remote 202.135.187.10
+dev tun
+ifconfig 10.0.0.1 10.0.0.2
+cd /etc/openvpn
+secret minhavpn.key
+port 5000
+user root
+group root
+comp-lzo
+ping 15
+verb 3
+daemon
+EOF
+
+openvpn --config /etc/openvpn/matriz.conf
+
+# Rota para chegar na rede da empresa B pelo tunel VPN
+route add -net 192.168.2.0/24 gw 10.0.0.2

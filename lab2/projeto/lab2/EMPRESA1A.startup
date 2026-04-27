@@ -1,0 +1,49 @@
+#configuracao do host EMPRESA1A
+ifconfig eth0 192.168.1.11 netmask 255.255.255.0 up
+route add default gw 192.168.1.1 dev eth0
+
+# Prepara chave SSH do usuario joaquim para autenticar no SERVIDORA sem senha
+mkdir -p /home/joaquim/.ssh
+cat > /home/joaquim/.ssh/id_rsa <<'EOF'
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
+NhAAAAAwEAAQAAAQEAnUgPejjz9pF73CQSKHP5q9OR6kQpGwSeoKP6ouXRyYW9eGxlO2MH
+Y8347D7cnKy84lRktmQRMtpyAVt0uQXF6fz/2lIy+dYnuW9hSdGRlhUT2vUwIDHi4WtLh8
+243BePojKS2FmeEnKAdHTM4sON0JQf7jAVYc1zyU5PNs2849BYphlx4YV+SyF+PLtLMAjq
+aLGWRnh7AeAq5Uj8YHJJ3Wz5mct93BR/K8H6iA77b9uEfO+xKpccBSiLMCZV1Ob30TRwGC
+i8SJKUQIZ6VsdnIFzCL5Ncq0SXgfNP0c88sRPeBA/awannxn4DU1/ekk7q9AGvnhGppCYu
+tl1kvfoqPQAAA9AYf+SAGH/kgAAAAAdzc2gtcnNhAAABAQCdSA96OPP2kXvcJBIoc/mr05
+HqRCkbBJ6go/qi5dHJhb14bGU7YwdjzfjsPtycrLziVGS2ZBEy2nIBW3S5BcXp/P/aUjL5
+1ie5b2FJ0ZGWFRPa9TAgMeLha0uHzbjcF4+iMpLYWZ4ScoB0dMziw43QlB/uMBVhzXPJTk
+82zbzj0FimGXHhhX5LIX48u0swCOposZZGeHsB4CrlSPxgckndbPmZy33cFH8rwfqIDvtv
+24R877EqlxwFKIswJlXU5vfRNHAYKLxIkpRAhnpWx2cgXMIvk1yrRJeB80/RzzyxE94ED9
+rBqefGfgNTX96STur0Aa+eEamkJi62XWS9+io9AAAAAwEAAQAAAQANXvht4BShdBnPC8P9
+a2qg2HIxs8y4zso7huVCXv5YPwXuDG0IwPD6Y6LTVr7DlQ3Twe/z74rkw1xo0CEar6p1K3
+yGz3Ek+zdSVO007NuPIkiXVzvZqNQMbOY1a+BY2ans1JbWTLwa/l/8Roe6iXxvbIBQbAcN
+Uv2SchVa59+0kDodB1wslbncaMzQx0r7kqv800tD6y8c5wEi+g2Djab9Ty2Bucj+9J+TQz
+CWoab+0fKyl0tnv8V63jlTsQZ5A90tL8EyxO39HDNHZ/OHbgASuVO+2/XTQsGuklK5jMGb
+9i++hSJbPBs7sYMrhKRD30KsrNDombx5DBnLsCg+neRRAAAAgQCAG6aVZFWawc+AroFljU
+aUMDfLBuMJ6mhtRtfvOj7AQs43bdmSkMXKExEea2xNvuvsA5BYCFwcQzzwPy9sbyhyJLPU
+ClpVk6c5PghzI8UsxNQbYwjMLrwOomky0JbOzXQr8WQ/yA4JRS5t6540Popve/vtouCLPt
+lQ8z242DbU5QAAAIEA12KQ8CgZl/QcMpLzgBpU6GG0St2B88bYFO7QOtZ6htbSd2fxmzli
+uZveb/O2KwdrG+LOPIdJhmUw+hlBlYpD8QQoFemGK6aWBxHG7WR8VsSWnv1wUqVNj81VjK
+2vKV3hA0O3gQGn/ooVsuXRjJ7xtRQphF35t14l6wnohEgwJ8UAAACBALrwnv0wgCpWQVED
+Nqd1Sof9PEkIrlef1h2Liq0cMKqm7o5gG4MTSOqroRtwbWp/DFUv7ASjKDfWnOzUKSMriZ
+XhkTdxvIOJJJPRNdL0Mt9Aq04gNSg/PEyue2EjvFCWOS+Vx56h3gEL2hxpy/4SWt1tXXXr
+fxLWb4MRnQ/ASagZAAAAGGNvcXppZWlyb0BmZWxpcGUtbm90ZTI0SwEC
+-----END OPENSSH PRIVATE KEY-----
+EOF
+
+chmod 700 /home/joaquim/.ssh
+chmod 600 /home/joaquim/.ssh/id_rsa
+chown -R joaquim:joaquim /home/joaquim/.ssh
+su - joaquim -c "ssh-keygen -y -f /home/joaquim/.ssh/id_rsa > /home/joaquim/.ssh/id_rsa.pub"
+
+# Evita prompt interativo de host key nos testes do roteiro
+cat > /home/joaquim/.ssh/config <<'EOF'
+Host *
+	StrictHostKeyChecking no
+	UserKnownHostsFile /dev/null
+EOF
+chmod 600 /home/joaquim/.ssh/config
+chown joaquim:joaquim /home/joaquim/.ssh/config
