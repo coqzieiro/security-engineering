@@ -1,4 +1,4 @@
-# Resolução do Laboratório 2 — VPNs
+# Resolução do Laboratório 2 - VPNs
 
 ## Arquivos ajustados
 

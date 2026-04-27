@@ -1,0 +1,17 @@
+O tutorial de portscan funciona bem, mas o de honeypot me deu um trabalho extra.
+
+Eu não conseguia passar do comando a seguir:
+
+SERVIDOR:~$ iptables -i eth0 -d -f /etc/honeypot/mel.conf
+
+Revisei o arquivo mel.conf, busquei na Internet os comandos para ver se algo estava errado, reiniciei o lab duas vezes e nada. Achei estranho usar iptables nesse comando, mas imaginei que de alguma forma ele estaria usando o mel.conf na execução e colocando em prática um honeypot. Até que decidi testar outro comando, e então substitui o iptables por honeyd. Deu certo.
+
+Comando correto: SERVIDOR:~$ honeyd -i eth0 -d -f /etc/honeypot/mel.conf
+
+Infelizmente no livro está errado :( É o passo 16 do Tutorial 13.
+
+Ah, e teve outro problema: o arquivo tar.gz do lab13 não funciona. Nem o que está na página do livro e nem o arquivo que tenho do backup do site do Paulo que fiz há muito tempo. Ele não inicializa máquina nenhuma porque acaba dando um erro. Porém, como eu sei que o cenário do lab de portscan (lab12) é o mesmo, peguei o lab12.tar.gz e executei o tutorial 13 no mesmo ambiente. Deu tudo certo.
+
+Então, as modificações que fiz no tutorial 13 são:
+- Correção no comando 16, trocando iptables por honeyd
+- Alteração dos comando?s iniciais de download de lab13 para lab12.

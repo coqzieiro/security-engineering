@@ -1,0 +1,78 @@
+#configuracao do SERVIDOR da empresa
+ifconfig eth0 10.1.1.1 netmask 255.0.0.0 up
+ifconfig eth1 202.135.187.131 netmask 255.255.255.192 up
+route add default gw 202.135.187.129 dev eth1
+
+# Compartilhamento de internet via NAT.
+echo 1 > /proc/sys/net/ipv4/ip_forward
+iptables -F
+iptables -F -t nat
+iptables -F -t mangle
+iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE
+
+# Regras de redirecionamento de portas conforme tabela do laboratório.
+# EMPRESA1
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1122 -j DNAT --to-destination 10.1.1.11:22
+iptables -A FORWARD -p tcp -i eth1 --dport 1122 -d 10.1.1.11 -j ACCEPT
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1121 -j DNAT --to-destination 10.1.1.11:21
+iptables -A FORWARD -p tcp -i eth1 --dport 1121 -d 10.1.1.11 -j ACCEPT
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1180 -j DNAT --to-destination 10.1.1.11:80
+iptables -A FORWARD -p tcp -i eth1 --dport 1180 -d 10.1.1.11 -j ACCEPT
+
+# EMPRESA2
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1222 -j DNAT --to-destination 10.1.1.12:22
+iptables -A FORWARD -p tcp -i eth1 --dport 1222 -d 10.1.1.12 -j ACCEPT
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1221 -j DNAT --to-destination 10.1.1.12:21
+iptables -A FORWARD -p tcp -i eth1 --dport 1221 -d 10.1.1.12 -j ACCEPT
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1280 -j DNAT --to-destination 10.1.1.12:80
+iptables -A FORWARD -p tcp -i eth1 --dport 1280 -d 10.1.1.12 -j ACCEPT
+
+# EMPRESA3
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1322 -j DNAT --to-destination 10.1.1.13:22
+iptables -A FORWARD -p tcp -i eth1 --dport 1322 -d 10.1.1.13 -j ACCEPT
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1321 -j DNAT --to-destination 10.1.1.13:21
+iptables -A FORWARD -p tcp -i eth1 --dport 1321 -d 10.1.1.13 -j ACCEPT
+iptables -t nat -A PREROUTING -i eth1 -p tcp --dport 1380 -j DNAT --to-destination 10.1.1.13:80
+iptables -A FORWARD -p tcp -i eth1 --dport 1380 -d 10.1.1.13 -j ACCEPT
+
+# SSH local do firewall para comparar com acessos via portas redirecionadas.
+/etc/init.d/ssh start
+
+# Captura do tráfego externo durante os scans.
+tcpdump -i eth1 -w /hosthome/lab12.pcap >/tmp/lab12.tcpdump.log 2>&1 &
+
+# Preparo do cenário de honeypot em cima do mesmo laboratório.
+mkdir -p /etc/honeypot
+cat > /etc/honeypot/mel.conf <<'EOF'
+create mel
+set mel personality "Linux 2.4.20"
+set mel default tcp action reset
+add mel tcp port 21 open
+add mel tcp port 22 open
+add mel tcp port 80 open
+bind 10.1.1.250 mel
+EOF
+
+cat > /usr/local/bin/start_honeypot.sh <<'EOF'
+#!/bin/sh
+set -eu
+
+# Correção do roteiro: o comando correto usa honeyd, não iptables.
+honeyd -i eth0 -d -f /etc/honeypot/mel.conf >/tmp/honeyd.log 2>&1 &
+echo $! > /tmp/honeyd.pid
+echo "Honeyd iniciado. PID: $(cat /tmp/honeyd.pid)"
+EOF
+chmod +x /usr/local/bin/start_honeypot.sh
+
+cat > /usr/local/bin/stop_honeypot.sh <<'EOF'
+#!/bin/sh
+set -eu
+
+if [ -f /tmp/honeyd.pid ]; then
+	kill "$(cat /tmp/honeyd.pid)" 2>/dev/null || true
+	rm -f /tmp/honeyd.pid
+fi
+
+echo "Honeyd encerrado."
+EOF
+chmod +x /usr/local/bin/stop_honeypot.sh

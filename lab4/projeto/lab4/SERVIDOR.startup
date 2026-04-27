@@ -1,0 +1,7 @@
+/etc/init.d/networking restart
+
+# Inicia o FTP para o teste de filtragem MITM.
+/etc/init.d/proftpd start
+
+# Captura o tráfego local para análise posterior no Wireshark.
+tcpdump -i eth0 -w /hosthome/lab11serv.pcap >/tmp/lab11serv.tcpdump.log 2>&1 &

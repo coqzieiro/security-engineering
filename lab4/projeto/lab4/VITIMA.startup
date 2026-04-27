@@ -1,0 +1,4 @@
+/etc/init.d/networking restart
+
+# Captura o tráfego local para comparação antes/depois do MITM.
+tcpdump -i eth0 -w /hosthome/lab11vitima.pcap >/tmp/lab11vitima.tcpdump.log 2>&1 &

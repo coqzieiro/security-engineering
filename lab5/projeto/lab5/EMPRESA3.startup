@@ -1,0 +1,10 @@
+#configuracao do host EMPRESA3
+ifconfig eth0 10.1.1.13 netmask 255.0.0.0 up
+route add default gw 10.1.1.1 dev eth0
+
+# Servicos usados nos testes de reconhecimento e portscan.
+/etc/init.d/apache2 start
+/etc/init.d/squid start
+/etc/init.d/bind start
+/etc/init.d/proftpd start
+/etc/init.d/ssh start
