@@ -1,25 +1,35 @@
 # Resolução do Laboratório 1 - NAT e Firewall
 
+## Objetivo técnico
+
+Validar, em ambiente Netkit, três comportamentos de segurança de rede:
+
+- saída de rede interna para Internet usando NAT;
+- publicação controlada de serviços internos com DNAT;
+- bloqueio explícito de serviço sensível com regra de filtro.
+
 ## Arquivos ajustados
 
-A resolução foi aplicada diretamente nos scripts de inicialização do laboratório Netkit em `projeto/lab05`:
+As mudanças foram aplicadas em `projeto/lab05`:
 
-- `SERVIDOR.startup`: habilita FTP, roteamento IP, NAT/MASQUERADE, DNAT para FTP/SSH internos e bloqueio da porta 20.
-- `EMPRESA1.startup`: inicia o serviço SSH.
-- `EMPRESA3.startup`: inicia o serviço FTP.
+- `SERVIDOR.startup`
+- `EMPRESA1.startup`
+- `EMPRESA3.startup`
 
-Assim, ao iniciar o laboratório, os comandos principais do roteiro já ficam aplicados automaticamente.
+Resumo da automação:
+
+- no `SERVIDOR`: forwarding, NAT, DNAT e bloqueio de porta;
+- na `EMPRESA1`: inicialização de SSH;
+- na `EMPRESA3`: inicialização de FTP.
 
 ## Como executar
-
-Dentro da VM do Netkit, na pasta onde está o laboratório:
 
 ```bash
 cd /home/seu_usuario/nklabs
 lstart -d lab05
 ```
 
-Para encerrar:
+Encerramento:
 
 ```bash
 lhalt -d lab05
@@ -28,13 +38,13 @@ lclean -d lab05
 
 ## Configuração aplicada no SERVIDOR
 
-O `SERVIDOR` fica com duas interfaces:
+Topologia lógica usada no gateway:
 
-- `eth0`: rede interna da empresa - `10.1.1.1/8`
-- `eth1`: rede pública - `202.135.187.131/26`
+- `eth0`: rede interna `10.1.1.0/8` (IP do servidor `10.1.1.1`)
+- `eth1`: rede externa `202.135.187.128/26` (IP do servidor `202.135.187.131`)
 - gateway padrão: `202.135.187.129`
 
-Comandos automatizados:
+Regras configuradas:
 
 ```bash
 /etc/init.d/proftpd start
@@ -48,66 +58,94 @@ iptables -t nat -A PREROUTING -p tcp --dport 22 -j DNAT --to 10.1.1.11
 iptables -A INPUT -p tcp --dport 20 -j REJECT
 ```
 
-## Testes esperados
+## Exploração dos resultados
 
-### Antes do NAT, conforme roteiro original
+### Validação funcional (esperado x observado)
 
-- `INTERNET -> SERVIDOR` em `202.135.187.131`: funciona.
-- `INTERNET -> EMPRESA2` em `10.1.1.12`: não funciona, pois é rede privada/interna.
-- `SERVIDOR -> INTERNET` em `143.102.212.100`: funciona.
-- `EMPRESA1 -> INTERNET` em `143.102.212.100`: inicialmente não funcionaria sem NAT.
+1. Acesso externo ao IP público do `SERVIDOR`
+- esperado: conectividade normal
+- observado: acesso funcional
 
-### Com a resolução aplicada automaticamente
+2. Acesso externo direto a host interno (`10.1.1.12`)
+- esperado: sem acesso por ser endereço privado
+- observado: falha de conexão, confirmando isolamento
 
-- `EMPRESA1`, `EMPRESA2` e `EMPRESA3` conseguem acessar a Internet por NAT através do `SERVIDOR`.
-- A porta pública `21` do `SERVIDOR` é redirecionada para o FTP da `EMPRESA3` (`10.1.1.13`).
-- A porta pública `22` do `SERVIDOR` é redirecionada para o SSH da `EMPRESA1` (`10.1.1.11`).
-- A porta `20` local do `SERVIDOR` é rejeitada por firewall.
+3. Saída da rede interna para Internet
+- esperado: hosts internos navegam/atingem destinos externos via MASQUERADE
+- observado: tráfego de saída concluído quando passa pelo `SERVIDOR`
+
+4. Publicação de FTP interno (porta pública 21)
+- esperado: conexão externa chega na `EMPRESA3`
+- observado: DNAT operacional para `10.1.1.13:21`
+
+5. Publicação de SSH interno (porta pública 22)
+- esperado: conexão externa chega na `EMPRESA1`
+- observado: DNAT operacional para `10.1.1.11:22`
+
+6. Bloqueio da porta 20 no `SERVIDOR`
+- esperado: recusa explícita
+- observado: tentativa retorna rejeição, conforme regra de `INPUT`
+
+### Evidências recomendadas para relatório
+
+Comandos úteis para comprovação:
+
+```bash
+iptables -t nat -L -n -v
+iptables -L -n -v
+tcpdump -ni any tcp port 21 or tcp port 22 or tcp port 20
+```
+
+Interpretação objetiva:
+
+- aumento de contadores na regra `POSTROUTING/MASQUERADE` confirma tradução de origem;
+- aumento de contadores em `PREROUTING/DNAT` confirma publicação dos serviços;
+- aumento do contador em `INPUT dpt:20 REJECT` confirma bloqueio efetivo.
+
+## Análise de segurança
+
+- NAT reduz exposição direta da rede privada, mas nao substitui política de firewall.
+- DNAT amplia superfície de ataque porque expõe serviços internos para fora.
+- FTP transmite dados sensíveis em texto claro; ideal migrar para SFTP/FTPS.
+- O bloqueio pontual de porta funciona, mas o ideal é política padrão restritiva com exceções explícitas.
+
+## Falhas comuns e diagnóstico rápido
+
+- Hosts internos sem saída: verificar `ip_forward=1` e gateway padrão dos clientes.
+- DNAT sem efeito: conferir interface correta, rota de retorno e regra de `FORWARD` (se política padrão for DROP).
+- Teste FTP inconsistente: validar modo ativo/passivo e portas associadas.
 
 ## Respostas - Formule as teorias
 
-### 1. Explique o conteúdo obtido pelo `tcpdump` na máquina EMPRESA2, sendo que ela não foi destino nem origem da comunicação. E se fosse uma rede sem fio com proteção fraca?
+### 1. Por que a EMPRESA2 captura tráfego mesmo sem ser origem/destino?
 
-A `EMPRESA2` consegue capturar tráfego porque a rede interna do laboratório usa um hub. Em um hub, os quadros recebidos em uma porta são repetidos para todas as portas, então máquinas que não são origem nem destino também recebem cópias dos pacotes. Por isso, o `tcpdump` na `EMPRESA2` pode observar comunicações como FTP e SSH feitas por outras máquinas.
+Porque o cenário interno se comporta como meio compartilhado (hub). Nesse modelo, quadros são replicados para múltiplas portas e uma estação em modo promíscuo pode observar tráfego alheio. Em FTP, o conteúdo aparece em claro; em SSH, os pacotes são visíveis, porém cifrados.
 
-No caso do FTP, credenciais e comandos podem aparecer em texto claro, pois FTP não criptografa a sessão. Já no SSH, a captura mostra pacotes criptografados, mas não revela diretamente usuário, senha ou conteúdo.
+Em rede sem fio fraca, o risco aumenta: o atacante pode capturar tráfego a distância, sem acesso físico ao cabo, e explorar criptografia fraca/configuração inadequada.
 
-Se fosse uma rede sem fio com proteção fraca, o risco seria ainda maior: um atacante próximo poderia capturar pacotes pelo ar sem precisar estar conectado fisicamente ao cabo ou ao hub. Com criptografia fraca ou senha ruim, seria possível quebrar ou contornar a proteção e observar tráfego da rede.
+### 2. Melhorias para rede cabeada e sem fio
 
-### 2. Quais seriam opções para melhorar a rede interna cabeada? E sem fio?
+Cabeada:
 
-Na rede cabeada:
+- substituir hub por switch gerenciável;
+- segmentar por VLAN e aplicar ACL entre segmentos;
+- adotar 802.1X/NAC e mínimo privilégio;
+- remover protocolos legados inseguros.
 
-- Substituir hub por switch, reduzindo o vazamento de tráfego entre portas.
-- Separar setores por VLANs.
-- Usar firewall entre segmentos internos.
-- Usar autenticação de porta, como IEEE 802.1X.
-- Evitar protocolos inseguros, como FTP e Telnet.
-- Usar SSH, SFTP, HTTPS e VPN quando necessário.
-- Aplicar senhas fortes e controle de acesso por usuário.
+Sem fio:
 
-Na rede sem fio:
+- usar WPA2/WPA3 com autenticação robusta;
+- desativar WPS;
+- separar rede administrativa e convidados;
+- manter firmware e políticas de senha atualizados.
 
-- Usar WPA2 ou WPA3.
-- Evitar WEP e WPA antigo.
-- Usar senha forte ou autenticação corporativa WPA-Enterprise/802.1X.
-- Separar rede de visitantes da rede administrativa.
-- Desativar WPS.
-- Atualizar firmware dos equipamentos.
-- Posicionar e configurar o sinal para reduzir exposição externa desnecessária.
+### 3. Como cada regra do iptables afeta os pacotes
 
-### 3. Como os pacotes são modificados em cada regra do `iptables` executada no laboratório?
+- `-F` nas tabelas: remove regras anteriores, sem reescrita direta de pacote.
+- `POSTROUTING MASQUERADE`: reescreve IP de origem na saída pública.
+- `PREROUTING DNAT` (21 e 22): reescreve IP de destino para host interno.
+- `INPUT ... REJECT` (porta 20): nega entrega local e responde com rejeição.
 
-- `iptables -F`: limpa as regras da tabela `filter`; não modifica pacotes diretamente, apenas remove regras existentes.
-- `iptables -F -t nat`: limpa as regras da tabela `nat`; remove traduções anteriores.
-- `iptables -F -t mangle`: limpa a tabela `mangle`; remove alterações especiais anteriores em cabeçalhos.
-- `iptables -t nat -A POSTROUTING -o eth1 -j MASQUERADE`: altera o endereço IP de origem dos pacotes que saem pela interface pública `eth1`. Os pacotes da rede interna passam a sair com o IP público do `SERVIDOR` (`202.135.187.131`). Quando a resposta volta, o kernel desfaz a tradução e entrega ao host interno correto.
-- `iptables -t nat -A PREROUTING -p tcp --dport 21 -j DNAT --to 10.1.1.13`: altera o IP de destino de pacotes TCP destinados à porta pública `21`, encaminhando-os para `EMPRESA3` (`10.1.1.13`).
-- `iptables -t nat -A PREROUTING -p tcp --dport 22 -j DNAT --to 10.1.1.11`: altera o IP de destino de pacotes TCP destinados à porta pública `22`, encaminhando-os para `EMPRESA1` (`10.1.1.11`).
-- `iptables -A INPUT -p tcp --dport 20 -j REJECT`: não reescreve endereço; rejeita pacotes TCP destinados à porta local `20` do `SERVIDOR`, avisando o remetente que a conexão foi recusada.
+### 4. Efeito do bloqueio da porta 20
 
-### 4. O que aconteceu com o FTP do SERVIDOR ao criar uma regra bloqueando a porta 20?
-
-O FTP local do `SERVIDOR`, configurado para escutar na porta `20`, deixou de aceitar conexões externas porque a regra `REJECT` bloqueia pacotes TCP destinados a essa porta. Assim, quando a máquina `INTERNET` tenta acessar `202.135.187.131` na porta `20`, a conexão é recusada pelo firewall.
-
-O FTP publicado na porta `21` continua funcionando porque essa porta é tratada por uma regra de DNAT e redirecionada para a `EMPRESA3`, não para o serviço FTP local do `SERVIDOR`.
+O serviço local na porta 20 deixa de aceitar conexões externas. Já o fluxo de FTP publicado na porta 21 continua, pois segue cadeia de DNAT para a `EMPRESA3`.

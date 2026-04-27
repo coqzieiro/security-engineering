@@ -1,17 +1,19 @@
 # Resolução do Laboratório 5 - Portscan, Footprinting e Honeypot
 
+## Objetivo técnico
+
+Mapear exposição de superfície de ataque a partir da Internet, validar publicação de serviços internos via DNAT e instrumentar honeypot para observação de tentativas de acesso.
+
 ## Base utilizada
 
-Esta resolução foi construída com base em:
-
 - `docs/Aula Prática 5 - Parte1 - Portscan.pdf` (Lab XII)
-- `docs/Portscan_Honeypots.pdf` (teoria de portscan + honeypots)
-- `docs/Dicas.txt` (correção do comando de honeypot)
-- pacote `projeto/netkit_lab5-no-edisciplinas.tar.gz` (cenário `lab12`)
+- `docs/Portscan_Honeypots.pdf`
+- `docs/Dicas.txt`
+- `projeto/netkit_lab5-no-edisciplinas.tar.gz` (cenário `lab12`)
 
 ## Arquivos ajustados
 
-A automação foi aplicada em `projeto/lab12`:
+Automação aplicada em `projeto/lab12`:
 
 - `SERVIDOR.startup`
 - `EMPRESA1.startup`
@@ -22,7 +24,7 @@ A automação foi aplicada em `projeto/lab12`:
 
 ### EMPRESA1, EMPRESA2 e EMPRESA3
 
-Além da configuração de IP e rota padrão, os serviços do exercício já sobem automaticamente:
+Serviços inicializados automaticamente:
 
 - Apache (`apache2`)
 - Proxy (`squid`)
@@ -32,26 +34,24 @@ Além da configuração de IP e rota padrão, os serviços do exercício já sob
 
 ### SERVIDOR
 
-Foi automatizado o cenário completo do Lab XII:
+- `ip_forward=1`;
+- limpeza das tabelas `filter`, `nat`, `mangle`;
+- NAT de saída (`MASQUERADE`);
+- DNAT e encaminhamento para serviços internos;
+- SSH local ativo;
+- captura em `/hosthome/lab12.pcap`.
 
-- ativação de encaminhamento IP (`ip_forward`)
-- limpeza de regras antigas (`filter`, `nat`, `mangle`)
-- NAT/MASQUERADE para saída pela interface `eth1`
-- redirecionamento de portas (DNAT + FORWARD) para EMPRESA1, EMPRESA2 e EMPRESA3
-- inicialização do SSH no próprio servidor
-- captura de tráfego em `/hosthome/lab12.pcap`
+### Honeypot
 
-Também foi preparada a parte de honeypot:
+- criação de `/etc/honeypot/mel.conf`;
+- script `/usr/local/bin/start_honeypot.sh`;
+- script `/usr/local/bin/stop_honeypot.sh`.
 
-- criação de `/etc/honeypot/mel.conf`
-- criação do script `/usr/local/bin/start_honeypot.sh`
-- criação do script `/usr/local/bin/stop_honeypot.sh`
-
-Importante: conforme `docs/Dicas.txt`, o comando correto para iniciar o honeypot é com `honeyd`, não com `iptables`.
+Nota: o comando correto de inicialização é com `honeyd`.
 
 ## Tabela de redirecionamento aplicada
 
-| Serviço | Destino | Porta origem (pública) | Porta destino (interna) |
+| Serviço | Destino | Porta pública | Porta interna |
 |---|---|---:|---:|
 | SSH | 10.1.1.11 (EMPRESA1) | 1122 | 22 |
 | FTP | 10.1.1.11 (EMPRESA1) | 1121 | 21 |
@@ -65,11 +65,8 @@ Importante: conforme `docs/Dicas.txt`, o comando correto para iniciar o honeypot
 
 ## Como executar
 
-Na VM Netkit:
-
 ```bash
 cd /home/seu_usuario/nklabs
-# extraia/copiei a pasta lab12 de projeto para cá
 lstart -d lab12
 ```
 
@@ -81,55 +78,75 @@ lclean -d lab12
 rm -f /tmp/*.disk
 ```
 
-## Testes esperados (Portscan e Footprinting)
+## Exploração dos resultados
 
-1. Da `INTERNET`, testar conectividade interna direta:
+### Validação 1: isolamento da rede privada
+
+Da `INTERNET`:
 
 ```bash
 ping 10.1.1.12
 ```
 
-Esperado: não alcança rede privada diretamente.
+Esperado:
 
-2. Da `INTERNET`, escanear o IP público do servidor:
+- sem conectividade direta para IP privado.
+
+Interpretação:
+
+- confirma que acesso externo depende de publicação explícita no gateway.
+
+### Validação 2: enumeração de portas expostas
 
 ```bash
 nmap -sS -O 202.135.187.131
 nmap -p 1-1500 -sS -O 202.135.187.131
 ```
 
-Esperado: portas redirecionadas aparecem abertas após automação.
+Esperado:
 
-3. Testar SSH no próprio firewall e SSH redirecionado:
+- portas redirecionadas aparecem abertas;
+- portas nao publicadas permanecem fechadas/filtradas.
+
+Interpretação:
+
+- compara configuração planejada com superfície realmente visível para atacante externo.
+
+### Validação 3: comprovação de redirecionamento por serviço
 
 ```bash
 ssh joaquim@202.135.187.131
 ssh joaquim@202.135.187.131 -p 1122
-```
-
-Esperado: na segunda conexão, acesso ao conteúdo da EMPRESA1.
-
-4. Testes de coleta de banner e serviço:
-
-```bash
-telnet 202.135.187.131 22
-ssh -vN 202.135.187.131
 telnet 202.135.187.131 1180
 ```
 
-No telnet HTTP, usar:
+No HTTP via telnet:
 
 ```text
 HEAD / HTTP/1.0
 
 ```
 
-5. Validar captura:
+Esperado:
 
-- arquivo esperado em `/hosthome/lab12.pcap`
-- analisar no Wireshark com filtros por porta (`tcp.port == 1122`, `1180`, etc.)
+- acesso sem porta customizada atende serviço local do gateway (quando aplicável);
+- acesso na porta publicada cai no host interno correspondente;
+- banner/resposta HTTP condiz com servidor de destino.
 
-## Etapa Honeypot (mesmo cenário lab12)
+### Validação 4: captura e evidências
+
+- arquivo esperado: `/hosthome/lab12.pcap`;
+- filtros úteis no Wireshark:
+	- `tcp.port == 1122`
+	- `tcp.port == 1180`
+	- `ip.addr == 10.1.1.11`
+
+Leitura recomendada:
+
+- identificar mudança de destino após passagem pelo gateway;
+- confirmar relação entre tentativa externa e resposta interna.
+
+## Etapa Honeypot
 
 No `SERVIDOR`:
 
@@ -143,97 +160,74 @@ Parar:
 stop_honeypot.sh
 ```
 
-Comando equivalente correto (manual):
+Comando manual equivalente:
 
 ```bash
 honeyd -i eth0 -d -f /etc/honeypot/mel.conf
 ```
 
+Resultados a observar:
+
+- conexões de reconhecimento chegando ao honeypot;
+- possibilidade de identificar padrão de scan por portas e sequência de tentativas.
+
+## Análise técnica
+
+- DNAT permite publicação granular de serviços sem expor toda a rede.
+- A mesma técnica pode ampliar risco se houver serviço vulnerável internamente.
+- Portscan mostra a "verdade externa" da configuração, útil para auditoria contínua.
+- Honeypot agrega visibilidade e inteligência sobre tentativas de intrusão.
+
+## Falhas comuns e troubleshooting
+
+- porta esperada não aparece no nmap: revisar regra DNAT e serviço interno;
+- conexão abre e cai: verificar retorno de rota e regras de FORWARD;
+- honeypot sem eventos: validar interface correta e processo em execução;
+- captura incompleta: confirmar ponto de captura e filtro aplicado.
+
 ## Formule as teorias (respostas)
 
-### 1. Explique o funcionamento dos comandos de redirecionamento de portas
+### 1. Funcionamento do redirecionamento de portas
 
-O redirecionamento combina duas regras:
+O pacote chega ao IP público, passa por `PREROUTING` com DNAT (troca destino para host interno) e segue via `FORWARD`. A resposta retorna pelo gateway e mantém consistência de sessão para o cliente externo.
 
-- `PREROUTING` na tabela `nat` com `DNAT`: altera o IP/porta de destino do pacote ao chegar na interface pública.
-- `FORWARD` na tabela `filter`: permite encaminhar o pacote para o host interno alvo.
+### 2. Comandos úteis de iptables e nmap
 
-Exemplo conceitual:
+`iptables`:
 
-- cliente externo conecta em `202.135.187.131:1122`
-- `DNAT` reescreve para `10.1.1.11:22`
-- `FORWARD` permite o tráfego
-- resposta volta e o NAT mantém a sessão consistente para o cliente externo
+- `iptables -L -n -v`
+- `iptables -t nat -L -n -v`
+- `iptables -D ...`
+- `-m conntrack --ctstate ESTABLISHED,RELATED`
+- `-m limit --limit 10/second`
 
-### 2. Comandos interessantes de iptables e opções do nmap
+`nmap`:
 
-`iptables` úteis:
+- `-sV`, `-sC`, `-sU`, `-p-`, `-T1..-T5`
+- saídas `-oN`, `-oG`, `-oX`, `-oA`
 
-- listar regras com contadores: `iptables -L -n -v`, `iptables -t nat -L -n -v`
-- remover regra específica: `iptables -D ...`
-- política padrão restritiva: `iptables -P INPUT DROP` (com regras de exceção)
-- limitar taxa para mitigar abuso: `-m limit --limit 10/second`
-- rastrear estado: `-m conntrack --ctstate ESTABLISHED,RELATED`
+### 3. Outras formas de levantamento de informações
 
-`nmap` úteis:
+- enumeração DNS;
+- WHOIS/ASN;
+- fingerprint web;
+- enumeração SNMP exposta;
+- análise passiva de tráfego;
+- banner grabbing e metadados públicos.
 
-- detecção de serviços/versão: `-sV`
-- scripts NSE: `-sC` ou `--script <nome>`
-- scan UDP: `-sU`
-- scan completo de portas TCP: `-p-`
-- ajuste de timing: `-T1` até `-T5`
-- saída para arquivo: `-oN`, `-oG`, `-oX`, `-oA`
+### 4. Bloqueio de portscan e limitações
 
-### 3. Outras formas de levantar informações de uma possível vítima
+Rate limit, listas dinâmicas e IDS/IPS ajudam, mas scans lentos/distribuídos e técnicas evasivas reduzem eficácia. O mais robusto é defesa em camadas com mínima exposição e monitoramento contínuo.
 
-- DNS enumeração (`dig`, `nslookup`, transferência de zona mal configurada)
-- WHOIS e dados de ASN/blocos de IP
-- varredura web (headers, robots, diretórios, fingerprint de CMS)
-- SNMP quando exposto (`snmpwalk`)
-- análise passiva de tráfego (sniffing)
-- coleta de metadados de documentos públicos
-- banner grabbing em serviços TCP
+### 5. Uso de scanners no laboratório
 
-### 4. Bloqueio de port-scan e por que nem sempre é efetivo
-
-Configurações possíveis:
-
-- rate limit por IP e por destino
-- detecção por padrões de SYN/FIN/NULL/XMAS
-- bloqueio temporário com `recent`/`hashlimit`
-- fail2ban e IDS/IPS com assinaturas de scan
-
-Limitações:
-
-- scanners lentos/distribuídos driblam limites simples
-- falsos positivos podem bloquear tráfego legítimo
-- técnicas evasivas (decoys, fragmentação, timing) reduzem eficácia
-
-Melhor abordagem:
-
-- defesa em camadas: firewall + IDS/IPS + segmentação + monitoramento contínuo + hardening de serviços
-- reduzir superfície de ataque (fechar portas, restringir exposição, patching)
-
-### 5. Sobre scanners de rede e uso em laboratório
-
-Scanners comuns:
-
-- Nmap/Zenmap
-- Masscan
-- Unicornscan
-- RustScan
-
-No laboratório com roteamento ativo, o scanner ajuda a:
-
-- validar superfície exposta depois do NAT/DNAT
-- confirmar efeito de mudanças de firewall
-- comparar visibilidade externa versus interna da rede
+Scanners como Nmap, Masscan, Unicornscan e RustScan servem para validar exposição real, comparar antes/depois de regras e medir aderência da configuração ao desenho de segurança.
 
 ## Conclusão
 
-O lab 5 foi resolvido de forma completa no cenário disponível (`lab12`), cobrindo:
+O lab foi consolidado no cenário `lab12` com foco em:
 
-- footprinting e portscan externo
-- NAT e redirecionamento de portas para serviços internos
-- análise de tráfego capturado
-- preparação e execução de honeypot com comando corrigido (`honeyd`)
+- footprinting e portscan externo;
+- publicação controlada de serviços por DNAT;
+- verificação de resultados em captura de tráfego;
+- instrumentação de honeypot para observabilidade.

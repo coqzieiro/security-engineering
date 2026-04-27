@@ -1,8 +1,12 @@
 # Resolução do Laboratório 4 - Man in the Middle
 
+## Objetivo técnico
+
+Demonstrar ataque MITM com ARP poisoning, comprovar a interceptação em captura de rede e validar alteração ativa de conteúdo de aplicação durante o tráfego.
+
 ## Arquivos ajustados
 
-A resolução foi aplicada diretamente nos scripts de inicialização do laboratório Netkit em `projeto/lab11`:
+Automação aplicada em `projeto/lab11`:
 
 - `SERVIDOR.startup`
 - `VITIMA.startup`
@@ -12,37 +16,33 @@ A resolução foi aplicada diretamente nos scripts de inicialização do laborat
 
 ### SERVIDOR
 
-- Reinício de rede.
-- Inicialização do serviço `proftpd`.
-- Captura de tráfego em background para `/hosthome/lab11serv.pcap`.
+- reinício de rede;
+- inicialização do `proftpd`;
+- captura para `/hosthome/lab11serv.pcap`.
 
 ### VITIMA
 
-- Reinício de rede.
-- Captura de tráfego em background para `/hosthome/lab11vitima.pcap`.
+- reinício de rede;
+- captura para `/hosthome/lab11vitima.pcap`.
 
 ### MIDDLEMAN
 
-- Reinício de rede.
-- Habilitação de encaminhamento IP (`ip_forward=1`) para manter o tráfego fluindo durante MITM.
-- Criação automática do filtro de alteração de banner FTP em `/root/pftp_filter.src`.
-- Compilação do filtro para `/root/pftp_filter.fil` com `etterfilter`.
-- Criação de scripts utilitários:
-  - `/usr/local/bin/start_mitm_capture.sh` (MITM com ARP poisoning sem filtro)
-  - `/usr/local/bin/start_mitm_filter_capture.sh` (MITM com ARP poisoning e filtro)
-  - `/usr/local/bin/stop_mitm_and_export.sh` (encerra ataques e copia `mitm*.pcap` para `/hosthome`)
+- `ip_forward=1` para manter disponibilidade durante interceptação;
+- criação do filtro FTP em `/root/pftp_filter.src`;
+- compilação com `etterfilter` para `/root/pftp_filter.fil`;
+- scripts operacionais:
+  - `/usr/local/bin/start_mitm_capture.sh`
+  - `/usr/local/bin/start_mitm_filter_capture.sh`
+  - `/usr/local/bin/stop_mitm_and_export.sh`
 
 ## Como executar
 
-Na VM Netkit:
-
 ```bash
 cd /home/seu_usuario/nklabs
-# copie/extrai o conteúdo de projeto/lab11 para esta pasta
 lstart -d lab11
 ```
 
-Encerrar:
+Encerramento:
 
 ```bash
 lhalt -d lab11
@@ -50,100 +50,116 @@ lclean -d lab11
 rm -f /tmp/*.disk
 ```
 
-## Roteiro de teste objetivo
+## Exploração dos resultados
 
-1. Confirmar estado inicial da ARP na vítima e no servidor:
+### Etapa 1: baseline ARP
+
+Antes do ataque, coletar tabela ARP em vítima e servidor:
 
 ```bash
 arp
 ```
 
-2. No `MIDDLEMAN`, iniciar MITM sem filtro:
+Esperado:
+
+- mapeamento IP->MAC legítimo para cada par.
+
+### Etapa 2: MITM sem modificação de payload
+
+Iniciar ataque no `MIDDLEMAN`:
 
 ```bash
 start_mitm_capture.sh
 ```
 
-3. Na `VITIMA`, gerar tráfego:
+Gerar tráfego na `VITIMA`:
 
 ```bash
 ping -c 1 servidor
 ```
 
-4. Conferir ARP em `VITIMA` e `SERVIDOR`:
+Coletar ARP novamente em ambos os lados.
 
-```bash
-arp
-```
+Resultado esperado:
 
-Esperado: mudança do MAC associado ao IP do outro host (envenenamento ARP).
+- IP do par passa a apontar para MAC do atacante;
+- comunicação segue funcional (ataque furtivo) por causa do forwarding.
 
-5. No `MIDDLEMAN`, parar ataque atual:
+### Etapa 3: MITM com alteração de conteúdo
 
 ```bash
 stop_mitm_and_export.sh
-```
-
-6. No `MIDDLEMAN`, iniciar MITM com filtragem:
-
-```bash
 start_mitm_filter_capture.sh
 ```
 
-7. Na `VITIMA`, acessar FTP:
+Na vítima:
 
 ```bash
 ftp servidor
 ```
 
-Esperado no banner: `220 ProFTP Hacked! ...`.
+Resultado esperado:
 
-8. Encerrar e exportar capturas:
+- banner alterado para `220 ProFTP Hacked! ...`;
+- demonstra ataque ativo com manipulação em trânsito.
+
+Encerrar e exportar:
 
 ```bash
 stop_mitm_and_export.sh
 ```
 
-## Arquivos de captura esperados
+## Evidências de captura esperadas
 
 - `/hosthome/lab11serv.pcap`
 - `/hosthome/lab11vitima.pcap`
 - `/hosthome/mitm.pcap`
 - `/hosthome/mitm_filter.pcap`
 
-## Formule as teorias (respostas)
+Leituras recomendadas no Wireshark:
 
-### 1. Através da observação do conteúdo do Wireshark, explique o funcionamento do ataque MITM
+- filtro `arp` para observar replies anômalos e repetitivos;
+- filtro `ftp` para verificar alteração de banner;
+- correlação temporal entre início do `ettercap` e mudança na tabela ARP.
 
-No ataque MITM por ARP poisoning, o atacante envia respostas ARP falsas para os dois lados:
+## Interpretação técnica dos resultados
 
-- para a vítima, dizendo que o IP do servidor possui o MAC do atacante;
-- para o servidor, dizendo que o IP da vítima possui o MAC do atacante.
+- O ataque é bem-sucedido quando há ao mesmo tempo:
+  - alteração da tabela ARP dos alvos,
+  - fluxo de aplicação preservado,
+  - tráfego passando pelo middleman.
+- A etapa com filtro prova capacidade de adulteração, não apenas escuta passiva.
+- O cenário evidencia impacto alto quando há protocolos em claro (FTP).
 
-Com isso, os dois hosts passam a enviar quadros Ethernet para o atacante. O atacante então encaminha os pacotes ao destino real (com `ip_forward` habilitado), ficando no meio da comunicação sem interrompê-la. No Wireshark isso aparece como:
-
-- pacotes ARP de atualização/reply suspeitos e repetidos;
-- alteração de mapeamentos IP->MAC nas tabelas ARP;
-- tráfego de aplicação da vítima/servidor atravessando a interface do middleman.
-
-No caso com filtro do ettercap, além de interceptar, o atacante modifica o payload em trânsito (banner `ProFTPD` para `ProFTP Hacked!`).
-
-### 2. Estratégia para detectar e combater esse ataque em rede interna
+## Detecção e mitigação
 
 Medidas práticas de defesa:
 
-- substituir hubs por switches gerenciáveis com proteção de camada 2;
-- habilitar Dynamic ARP Inspection (DAI) e DHCP Snooping quando disponível;
-- usar port-security (limite de MAC por porta) e segmentação por VLAN;
-- monitorar anomalias ARP (duplicidade de MAC para IPs críticos, volume anormal de ARP replies);
-- usar tabelas ARP estáticas para ativos críticos quando viável;
-- priorizar protocolos criptografados (SSH, HTTPS, SFTP, FTPS) para reduzir impacto de interceptação;
-- manter IDS/IPS e alertas de variações de latência/trajeto em fluxos internos.
+- switches com DAI e DHCP Snooping;
+- port-security e segmentação por VLAN;
+- monitoramento de inconsistências ARP;
+- tabelas ARP estáticas em ativos críticos;
+- preferência por protocolos cifrados (SSH, HTTPS, SFTP, FTPS);
+- IDS/IPS com regras para ARP poisoning.
 
-### 3. Outros ataques que podem ser conjugados com MITM além da filtragem
+## Falhas comuns e troubleshooting
 
-1. Sequestro de sessão (session hijacking):
-O atacante captura cookies/tokens de sessão em protocolos sem proteção adequada e reutiliza esses artefatos para assumir sessões autenticadas.
+- ataque derruba tráfego: verificar `ip_forward=1` no atacante;
+- sem alteração no banner FTP: validar compilação/aplicação do filtro `etterfilter`;
+- ARP não muda: checar interfaces e nomes de host corretos no comando de envenenamento;
+- pcap vazio: confirmar permissões e caminho de saída (`/hosthome`).
 
-2. DNS spoofing (injeção/forja de respostas DNS):
-Durante o MITM, o atacante responde consultas DNS com IP falso, redirecionando a vítima para serviços maliciosos (phishing, malware, coleta de credenciais).
+## Formule as teorias (respostas)
+
+### 1. Funcionamento do MITM observado no Wireshark
+
+O atacante injeta ARP replies falsos para cada ponta, associando o IP do outro host ao seu próprio MAC. Com isso, vítima e servidor passam a encaminhar quadros ao atacante, que retransmite ao destino real. O tráfego continua funcional, porém interceptado. Com filtro ativo, ocorre adulteração de payload em tempo real.
+
+### 2. Estratégia para detectar e combater em rede interna
+
+Combinar controles de camada 2 (DAI, DHCP Snooping, port-security), segmentação e criptografia de aplicação reduz fortemente a efetividade do ataque. Monitoramento contínuo de ARP anômalo e resposta rápida completam a defesa.
+
+### 3. Ataques combináveis com MITM
+
+1. Sequestro de sessão: captura e reutilização de tokens/cookies.
+2. DNS spoofing: respostas DNS falsas para redirecionamento malicioso.
